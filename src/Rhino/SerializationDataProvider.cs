@@ -12,18 +12,17 @@ using Sitecore.Data.Items;
 using Sitecore.Data.Managers;
 using Sitecore.Data.Serialization;
 using Sitecore.Data.Serialization.ObjectModel;
-using Sitecore.Data.Templates;
 using Sitecore.Diagnostics;
 using Sitecore.Globalization;
 using Version = Sitecore.Data.Version;
 
 namespace Rhino
 {
-	public class RhinoSerializationDataProvider : DataProvider
+	public class SerializationDataProvider : DataProvider
 	{
 		private readonly SerializedDatabase _database;
 
-		public RhinoSerializationDataProvider(string connectionStringName)
+		public SerializationDataProvider(string connectionStringName)
 		{
 			Assert.ArgumentNotNullOrEmpty(connectionStringName, "connectionStringName");
 
@@ -36,29 +35,29 @@ namespace Rhino
 			_database = new SerializedDatabase(connectionString);
 
 			sw.Stop();
-			Log.Info(string.Format("Rhino: loaded {0} serialized items into memory index in {1}ms", _database.Count, sw.ElapsedMilliseconds), this);
+			Log.Info(string.Format("Rhino: loaded {0} serialized items into memory index in {1}ms", SerializedDatabase.Count, sw.ElapsedMilliseconds), this);
 		}
+
+		protected SerializedDatabase SerializedDatabase { get { return _database; } }
 
 		public override bool HasChildren(ItemDefinition itemDefinition, CallContext context)
 		{
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
 
-			return _database.HasChildren(itemDefinition.ID);
+			return SerializedDatabase.HasChildren(itemDefinition.ID);
 		}
 
 		public override IDList GetChildIDs(ItemDefinition itemDefinition, CallContext context)
 		{
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
 
-			if (itemDefinition == ItemDefinition.Empty) return new IDList();
+			if (itemDefinition == ItemDefinition.Empty) return null;
 
-			var children = _database.GetChildren(itemDefinition.ID);
+			var children = SerializedDatabase.GetChildren(itemDefinition.ID);
+			
+			if (children == null) return null;
+
 			var ids = new IDList();
-
-			if (children == null)
-			{
-				return ids;
-			}
 
 			foreach (var syncItem in children)
 			{
@@ -79,17 +78,16 @@ namespace Rhino
 
 			if (itemPath == string.Empty) itemPath = "/sitecore"; // the content editor expects "/" to resolve to /sitecore (verified against SQL provider)
 
-			var syncItem = _database.GetItem(itemPath);
+			var syncItem = SerializedDatabase.GetItem(itemPath);
 
-			if (syncItem == null)
-				return ID.Null;
+			if (syncItem == null) return null;
 
 			return syncItem.GetSitecoreId();
 		}
 
 		public override IdCollection GetTemplateItemIds(CallContext context)
 		{
-			var templatesRoot = _database.GetItemsWithTemplate(TemplateIDs.Template);
+			var templatesRoot = SerializedDatabase.GetItemsWithTemplate(TemplateIDs.Template);
 			var ids = new IdCollection();
 
 			foreach (var syncItem in templatesRoot)
@@ -106,7 +104,7 @@ namespace Rhino
 
 			if (itemDefinition == ItemDefinition.Empty) return null;
 
-			var syncItem = _database.GetItem(itemDefinition.ID);
+			var syncItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
 			if (syncItem == null) return null;
 
@@ -125,7 +123,7 @@ namespace Rhino
 
 			if (itemDefinition == ItemDefinition.Empty) return new FieldList();
 
-			var syncItem = _database.GetItem(itemDefinition.ID);
+			var syncItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
 			if (syncItem == null) return new FieldList();
 
@@ -156,7 +154,7 @@ namespace Rhino
 
 			var versions = new VersionUriList();
 
-			var syncItem = _database.GetItem(itemDefinition.ID);
+			var syncItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
 			foreach (var syncVersion in syncItem.Versions)
 			{
@@ -170,7 +168,7 @@ namespace Rhino
 		{
 			Assert.ArgumentNotNull(itemId, "itemId");
 
-			var syncItem = _database.GetItem(itemId);
+			var syncItem = SerializedDatabase.GetItem(itemId);
 
 			if (syncItem == null) return null;
 
@@ -189,7 +187,7 @@ namespace Rhino
 			Assert.ArgumentNotNull(parent, "parent");
 			Assert.ArgumentNotNull(context, "context");
 
-			var parentItem = _database.GetItem(parent.ID);
+			var parentItem = SerializedDatabase.GetItem(parent.ID);
 
 			Assert.IsNotNull(parentItem, "Parent item {0} did not exist in the serialization store!", parent.ID);
 
@@ -211,7 +209,7 @@ namespace Rhino
 					MasterID = ID.Null.ToString()
 				};
 
-			_database.SaveItem(syncItem);
+			SerializedDatabase.SaveItem(syncItem);
 
 			return true;
 		}
@@ -221,7 +219,7 @@ namespace Rhino
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
 			Assert.ArgumentNotNull(baseVersion, "baseVersion");
 
-			var existingItem = _database.GetItem(itemDefinition.ID);
+			var existingItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
 			int newVersionNumber;
 
@@ -251,7 +249,7 @@ namespace Rhino
 				existingItem.AddVersion(baseVersion.Language.Name, newVersionNumber.ToString(CultureInfo.InvariantCulture), ID.NewID.ToString());
 			}
 
-			_database.SaveItem(existingItem);
+			SerializedDatabase.SaveItem(existingItem);
 
 			return newVersionNumber;
 		}
@@ -259,7 +257,7 @@ namespace Rhino
 		public override LanguageCollection GetLanguages(CallContext context)
 		{
 			// TODO: remove when doing partial database serialization
-			var languages = _database.GetItemsWithTemplate(TemplateIDs.Language);
+			var languages = SerializedDatabase.GetItemsWithTemplate(TemplateIDs.Language);
 
 			return new LanguageCollection(languages.Select(x => Language.Parse(x.Name)));
 		}
@@ -271,11 +269,11 @@ namespace Rhino
 			Assert.ArgumentNotNullOrEmpty(copyName, "copyName");
 			Assert.ArgumentNotNull(copyId, "copyId");
 
-			var existingItem = _database.GetItem(source.ID);
+			var existingItem = SerializedDatabase.GetItem(source.ID);
 
 			Assert.IsNotNull(existingItem, "Could not copy {0} because it did not exist!", source.ID);
 
-			_database.CopyItem(existingItem, destination.ID, copyName, copyId);
+			SerializedDatabase.CopyItem(existingItem, destination.ID, copyName, copyId);
 
 			return true;
 		}
@@ -285,11 +283,11 @@ namespace Rhino
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
 			Assert.ArgumentNotNull(destination, "destination");
 
-			var existingItem = _database.GetItem(itemDefinition.ID);
+			var existingItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
 			Assert.IsNotNull(existingItem, "Item {0} to move did not exist!", itemDefinition.ID);
 
-			_database.MoveItem(existingItem, destination.ID);
+			SerializedDatabase.MoveItem(existingItem, destination.ID);
 
 			return true;
 		}
@@ -298,11 +296,11 @@ namespace Rhino
 		{
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
 
-			var existingItem = _database.GetItem(itemDefinition.ID);
+			var existingItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
 			if (existingItem == null) return true; // it was already gone (probably will never occur)
 
-			_database.DeleteItem(existingItem);
+			SerializedDatabase.DeleteItem(existingItem);
 
 			return true;
 		}
@@ -312,7 +310,7 @@ namespace Rhino
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
 			Assert.ArgumentNotNull(version, "version");
 
-			var existingItem = _database.GetItem(itemDefinition.ID);
+			var existingItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
 			Assert.IsNotNull(existingItem, "Existing item {0} did not exist in the serialization store!", itemDefinition.ID);
 
@@ -322,7 +320,7 @@ namespace Rhino
 
 			existingItem.Versions.Remove(syncVersion);
 
-			_database.SaveItem(existingItem);
+			SerializedDatabase.SaveItem(existingItem);
 
 			return true;
 		}
@@ -332,7 +330,7 @@ namespace Rhino
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
 			Assert.ArgumentNotNull(language, "language");
 
-			var existingItem = _database.GetItem(itemDefinition.ID);
+			var existingItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
 			Assert.IsNotNull(existingItem, "Existing item {0} did not exist in the serialization store!", itemDefinition.ID);
 
@@ -342,7 +340,7 @@ namespace Rhino
 					existingItem.Versions.RemoveAt(i);
 			}
 
-			_database.SaveItem(existingItem);
+			SerializedDatabase.SaveItem(existingItem);
 
 			return true;
 		}
@@ -352,13 +350,13 @@ namespace Rhino
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
 			Assert.ArgumentNotNull(changes, "changes");
 
-			var existingItem = _database.GetItem(itemDefinition.ID);
+			var existingItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
 			Assert.IsNotNull(existingItem, "Existing item {0} did not exist in the serialization store!", itemDefinition.ID);
 
 			var savedItem = ItemSynchronization.BuildSyncItem(changes.Item);
 
-			_database.SaveItem(savedItem);
+			SerializedDatabase.SaveItem(savedItem);
 
 			return true;
 		}

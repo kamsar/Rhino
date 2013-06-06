@@ -14,6 +14,7 @@ The data provider simply ghosts in the serialized items into the content tree, m
 ## TODO ##
 
 * Presently the provider indexes an entire database. The goal is to make it include only parts of the database (e.g. act as a data provider in concert with the SQL provider on the master database)
+    * This is mostly working. Need to test all the various methods and make sure the filtering works in all cases.
 * Cache invalidation with a FileSystemWatcher (when serialized items change, invalidate the cache for them). This is handled if the change is made by Rhino, but not if say SCM updates change files on disk.
 * Ability to exclude certain portions of an included path, ala a serialization preset
 * Option to 'auto-load' an included path: if the serialization root path for an inclusion is empty, fill it using the SQL provider's set of items. This would make installation really easy.
