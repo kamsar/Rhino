@@ -38,9 +38,13 @@ This is built with Sitecore 7.0 130424
 * Place Sitecore.Kernel.dll in \lib\Sitecore\
 * Grab the 'website' folder from a Sitecore zip distribution and copy the contents into Rhino.Website (git will ignore them)
 * Serialize the master database
-* Rename the 'master' serialization folder 'nosqlserialization'
+* Rename the 'master' serialization folder 'nosqlserialization' (or edit the connection string to change the root path)
 * Open the admin and switch to the nosqlserialization database
 * Break things
+
+## Rhino? ##
+
+Quite a silly moniker don't you agree? Chosen because a Rhino, much like a [Unicorn](https://github.com/kamsar/Unicorn), has a prominent horn. Hey, it could have been Narwhal :)
 
 ## Contributing ##
 
