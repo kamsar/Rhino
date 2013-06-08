@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Sitecore.Data;
 using Sitecore.Data.Serialization;
 using Sitecore.Data.Serialization.ObjectModel;
@@ -24,7 +25,7 @@ namespace Rhino.Data
                 throw new Exception(string.Format("Path not found {0}, current Path {1}", Path.GetFullPath(serializationPath), AppDomain.CurrentDomain.BaseDirectory));
             }
 
-            _index = new SerializedIndex(LoadTree(serializationPath));
+            _index = new SerializedIndex(LoadItems(serializationPath));
 	        _serializationPath = serializationPath;
         }
 
@@ -162,61 +163,32 @@ namespace Rhino.Data
 			return PathUtils.GetDirectoryPath(new ItemReference(syncItem.DatabaseName, syncItem.ItemPath).ToString(), _serializationPath) + PathUtils.Extension;
 		}
 
-	    private IEnumerable<SyncItem> LoadTree(string path)
+		private IEnumerable<SyncItem> LoadItems(string path)
 		{
 			Assert.ArgumentNotNullOrEmpty(path, "path");
-
-			var results = new List<SyncItem>();
-
-			results.AddRange(LoadOneLevel(path));
 
 			if (!Directory.Exists(path))
 			{
 				return Enumerable.Empty<SyncItem>();
 			}
 
-			var directories = Directory.GetDirectories(path);
+			var files = Directory.GetFiles(path, string.Format("*{0}", PathUtils.Extension), SearchOption.AllDirectories);
+			var syncItems = new List<SyncItem>(files.Length);
 
-			if (directories.Length > 1)
-			{
-				for (var i = 1; i < directories.Length; i++)
+			var writeLock = new object();
+			Parallel.ForEach(files, subPath =>
 				{
-					if (!"templates".Equals(Path.GetFileName(directories[i]), StringComparison.OrdinalIgnoreCase))
+					var item = LoadItem(subPath);
+					if (item != null)
 					{
-						continue;
+						lock (writeLock)
+						{
+							syncItems.Add(item);
+						}
 					}
+				});
 
-					var str = directories[0];
-
-					directories[0] = directories[i];
-					directories[i] = str;
-				}
-			}
-
-			foreach (var directory in directories)
-			{
-				if (!CommonUtils.IsDirectoryHidden(directory))
-				{
-					results.AddRange(LoadTree(directory));
-				}
-			}
-
-			return results;
-		}
-
-		private IEnumerable<SyncItem> LoadOneLevel(string path)
-		{
-			if (!Directory.Exists(path))
-			{
-				yield break;
-			}
-
-			foreach (var subPath in Directory.GetFiles(path, string.Format("*{0}", PathUtils.Extension)))
-			{
-				var item = LoadItem(subPath);
-				if (item != null)
-					yield return item;
-			}
+			return syncItems;
 		}
 
 		private SyncItem LoadItem(string path)
