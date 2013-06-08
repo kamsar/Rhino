@@ -100,7 +100,7 @@ namespace Rhino.Data
 
 			var destinationItem = GetItem(destination);
 
-			Assert.IsNotNull(destinationItem, "Could not copy {0}  to {1} because the destination did not exist!", destination);
+			Assert.IsNotNull(destinationItem, "Could not copy {0}  to {1} because the destination did not exist!", source.ID, destination);
 
 			var newItem = source.Clone();
 

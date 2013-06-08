@@ -3,6 +3,7 @@ using Sitecore.Collections;
 using Sitecore.Data;
 using Sitecore.Data.DataProviders;
 using Sitecore.Data.Items;
+using Sitecore.Data.Managers;
 using Sitecore.Diagnostics;
 using Sitecore.Globalization;
 
@@ -12,12 +13,14 @@ namespace Rhino
 	{
 		readonly IFilter _filter;
 
-		public FilteredSerializationDataProvider(string connectionStringName, string presetName) : base(connectionStringName)
+		public FilteredSerializationDataProvider(string connectionStringName, string presetName)
+			: base(connectionStringName)
 		{
 			_filter = new SerializationPresetFilter(presetName);
 		}
 
-		public FilteredSerializationDataProvider(string connectionStringName, IFilter filter) : base(connectionStringName)
+		public FilteredSerializationDataProvider(string connectionStringName, IFilter filter)
+			: base(connectionStringName)
 		{
 			Assert.ArgumentNotNull(filter, "filter");
 
@@ -35,10 +38,22 @@ namespace Rhino
 			return result.IsIncluded;
 		}
 
+		protected bool ShouldExecuteProvider(ItemDefinition parentItem, string childName, ID childId, ID childTemplateId, string childTemplateName)
+		{
+			// note: using upstream API to get parents in different data providers
+			var parent = Database.GetItem(parentItem.ID);
+
+			if (parent == null) return false; // parent item did not exist
+
+			var result = _filter.Includes(string.Concat(parent.Paths.FullPath, "/", childName), childId, childTemplateId, childTemplateName, Database);
+
+			return result.IsIncluded;
+		}
+
 		public override bool HasChildren(ItemDefinition itemDefinition, CallContext context)
 		{
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
-			
+
 			if (!ShouldExecuteProvider(itemDefinition.ID)) return false;
 
 			context.Abort();
@@ -59,7 +74,7 @@ namespace Rhino
 
 			foreach (ID child in childIds)
 			{
-				if(ShouldExecuteProvider(child)) filteredChildren.Add(child);
+				if (ShouldExecuteProvider(child)) filteredChildren.Add(child);
 			}
 
 			// invoke the other data providers, if any, and *unique* the child IDs
@@ -75,7 +90,7 @@ namespace Rhino
 
 				foreach (ID child in otherChildIds)
 				{
-					if(!filteredChildren.Contains(child)) filteredChildren.Add(child);
+					if (!filteredChildren.Contains(child)) filteredChildren.Add(child);
 				}
 			}
 
@@ -138,7 +153,15 @@ namespace Rhino
 
 		public override bool CreateItem(ID itemId, string itemName, ID templateId, ItemDefinition parent, CallContext context)
 		{
-			// TODO filtering of child of parent, cross-provider error(?)
+			Assert.ArgumentNotNull(itemId, "itemId");
+
+			var template = TemplateManager.GetTemplate(templateId, Database);
+
+			if (template == null) return false;
+
+			if (!ShouldExecuteProvider(parent, itemName, itemId, templateId, template.Name)) return false;
+
+			context.Abort();
 			return base.CreateItem(itemId, itemName, templateId, parent, context);
 		}
 
@@ -159,13 +182,24 @@ namespace Rhino
 
 		public override bool CopyItem(ItemDefinition source, ItemDefinition destination, string copyName, ID copyId, CallContext context)
 		{
-			// TODO filtering of child of destination, cross-provider error
+			Assert.ArgumentNotNull(source, "source");
+			Assert.ArgumentNotNull(destination, "destination");
+			Assert.ArgumentNotNullOrEmpty(copyName, "copyName");
+			Assert.ArgumentNotNull(copyId, "copyId");
+
+			var template = TemplateManager.GetTemplate(source.TemplateID, Database);
+
+			if (template == null) return false;
+
+			if (!ShouldExecuteProvider(destination, copyName, copyId, source.TemplateID, template.Name)) return false;
+
+			context.Abort();
 			return base.CopyItem(source, destination, copyName, copyId, context);
 		}
 
 		public override bool MoveItem(ItemDefinition itemDefinition, ItemDefinition destination, CallContext context)
 		{
-			// TODO filtering of child of destination, cross-provider error
+			// we don't need to filter moves, because moving items is only supported intra-provider so it should always execute
 			return base.MoveItem(itemDefinition, destination, context);
 		}
 

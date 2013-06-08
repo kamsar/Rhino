@@ -44,6 +44,21 @@ namespace Rhino.Filtering
 			return priorityResult ?? result; // return the last failure
 		}
 
+		public FilterResult Includes(string itemPath, ID itemId, ID templateId, string templateName, Database database)
+		{
+			var result = new FilterResult(true);
+			FilterResult priorityResult = null;
+			foreach (var entry in _preset)
+			{
+				result = Includes(entry, itemPath, itemId, templateId, templateName, database);
+
+				if (result.IsIncluded) return result; // it's definitely included if anything includes it
+				if (!string.IsNullOrEmpty(result.Justification)) priorityResult = result; // a justification means this is probably a more 'important' fail than others
+			}
+
+			return priorityResult ?? result; // return the last failure
+		}
+
 		public Item[] GetRootItems()
 		{
 			var items = new List<Item>();
@@ -71,24 +86,39 @@ namespace Rhino.Filtering
 			if (!item.ItemPath.StartsWith(entry.Path, StringComparison.OrdinalIgnoreCase)) return new FilterResult(false);
 
 			// check excludes
-			return ExcludeMatches(entry, item);
+			return ExcludeMatches(entry, item.ItemPath, ID.Parse(item.ID), ID.Parse(item.TemplateID), item.TemplateName);
 		}
 
-		protected virtual FilterResult ExcludeMatches(IncludeEntry entry, SyncItem item)
+		/// <summary>
+		/// Checks if a preset includes a given set of criteria
+		/// </summary>
+		protected FilterResult Includes(IncludeEntry entry, string itemPath, ID itemId, ID templateId, string templateName, Database database)
 		{
-			FilterResult result = ExcludeMatchesPath(entry.Exclude, item.ItemPath);
+			// check for db match
+			if (database.Name != entry.Database) return new FilterResult(false);
+
+			// check for path match
+			if (!itemPath.StartsWith(entry.Path, StringComparison.OrdinalIgnoreCase)) return new FilterResult(false);
+
+			// check excludes
+			return ExcludeMatches(entry, itemPath, itemId, templateId, templateName);
+		}
+
+		protected virtual FilterResult ExcludeMatches(IncludeEntry entry, string itemPath, ID itemId, ID templateId, string templateName)
+		{
+			FilterResult result = ExcludeMatchesPath(entry.Exclude, itemPath);
 
 			if (!result.IsIncluded) return result;
 
-			result = ExcludeMatchesTemplateId(entry.Exclude, ID.Parse(item.TemplateID));
+			result = ExcludeMatchesTemplateId(entry.Exclude, templateId);
 
 			if (!result.IsIncluded) return result;
 
-			result = ExcludeMatchesTemplate(entry.Exclude, item.TemplateName);
+			result = ExcludeMatchesTemplate(entry.Exclude, templateName);
 
 			if (!result.IsIncluded) return result;
 
-			result = ExcludeMatchesId(entry.Exclude, ID.Parse(item.ID));
+			result = ExcludeMatchesId(entry.Exclude, itemId);
 
 			return result;
 		}

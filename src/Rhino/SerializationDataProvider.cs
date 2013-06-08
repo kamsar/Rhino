@@ -58,7 +58,6 @@ namespace Rhino
 			if (children == null) return null;
 
 			var ids = new IDList();
-
 			foreach (var syncItem in children)
 			{
 				ids.Add(syncItem.GetSitecoreId());
@@ -121,11 +120,11 @@ namespace Rhino
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
 			Assert.ArgumentNotNull(versionUri, "versionUri");
 
-			if (itemDefinition == ItemDefinition.Empty) return new FieldList();
+			if (itemDefinition == ItemDefinition.Empty) return null;
 
 			var syncItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
-			if (syncItem == null) return new FieldList();
+			if (syncItem == null) return null;
 
 			var fields = new FieldList();
 
@@ -150,7 +149,7 @@ namespace Rhino
 		{
 			Assert.ArgumentNotNull(itemDefinition, "itemDefinition");
 
-			if (itemDefinition == ItemDefinition.Empty) return new VersionUriList();
+			if (itemDefinition == ItemDefinition.Empty) return null;
 
 			var versions = new VersionUriList();
 
@@ -187,15 +186,24 @@ namespace Rhino
 			Assert.ArgumentNotNull(parent, "parent");
 			Assert.ArgumentNotNull(context, "context");
 
-			var parentItem = SerializedDatabase.GetItem(parent.ID);
+			var existingItem = SerializedDatabase.GetItem(itemId);
 
-			Assert.IsNotNull(parentItem, "Parent item {0} did not exist in the serialization store!", parent.ID);
+			if (existingItem != null)
+			{
+				Log.Warn("Rhino tried to create item " + itemId + " but it already existed! Not creating it again.", this);
+				return false;
+			}
+
+			// NOTE how we use the Database to get the parent - this allows us to resolve the parent regardless of the data provider it resides in
+			var parentItem = Database.GetItem(parent.ID);
+
+			Assert.IsNotNull(parentItem, "Parent item {0} did not exist!", parent.ID);
 
 			var template = TemplateManager.GetTemplate(templateId, context.DataManager.Database);
 
 			Assert.IsNotNull(template, "The template ID {0} could not be found in {1}!", templateId, context.DataManager.Database.Name);
 
-			string newItemFullPath = string.Concat(parentItem.ItemPath, "/", itemName);
+			string newItemFullPath = string.Concat(parentItem.Paths.FullPath, "/", itemName);
 
 			var syncItem = new SyncItem
 				{
@@ -221,9 +229,9 @@ namespace Rhino
 
 			var existingItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
-			int newVersionNumber;
+			if (existingItem == null) return -1; // item may have been in another data provider, cede control
 
-			Assert.IsNotNull(existingItem, "Existing item {0} did not exist in the serialization store!", itemDefinition.ID);
+			int newVersionNumber;
 
 			if (baseVersion.Version.Number > 0)
 			{
@@ -256,7 +264,6 @@ namespace Rhino
 
 		public override LanguageCollection GetLanguages(CallContext context)
 		{
-			// TODO: remove when doing partial database serialization
 			var languages = SerializedDatabase.GetItemsWithTemplate(TemplateIDs.Language);
 
 			return new LanguageCollection(languages.Select(x => Language.Parse(x.Name)));
@@ -269,11 +276,16 @@ namespace Rhino
 			Assert.ArgumentNotNullOrEmpty(copyName, "copyName");
 			Assert.ArgumentNotNull(copyId, "copyId");
 
-			var existingItem = SerializedDatabase.GetItem(source.ID);
+			// we use the Database API instead of our own so we can get a source item from any data provider
+			var existingItem = Database.GetItem(source.ID);
 
 			Assert.IsNotNull(existingItem, "Could not copy {0} because it did not exist!", source.ID);
 
-			SerializedDatabase.CopyItem(existingItem, destination.ID, copyName, copyId);
+			var destinationItem = _database.GetItem(destination.ID);
+
+			Assert.IsNotNull(destinationItem, "Source item to copy {0} was in the Rhino provider but the destination parent {1} was not. Copying from Rhino to other providers is not supported.", source.Name, destination.Name);
+
+			SerializedDatabase.CopyItem(ItemSynchronization.BuildSyncItem(existingItem), destination.ID, copyName, copyId);
 
 			return true;
 		}
@@ -284,8 +296,11 @@ namespace Rhino
 			Assert.ArgumentNotNull(destination, "destination");
 
 			var existingItem = SerializedDatabase.GetItem(itemDefinition.ID);
+			var destinationItem = SerializedDatabase.GetItem(destination.ID);
 
-			Assert.IsNotNull(existingItem, "Item {0} to move did not exist!", itemDefinition.ID);
+			if(existingItem != null && destinationItem == null) throw new InvalidOperationException(string.Format("Source item to move {0} was in the Rhino provider but the destination parent {1} was not. Cross-provider moving is not supported.", itemDefinition.Name, destination.Name));
+			if (existingItem == null && destinationItem != null) throw new InvalidOperationException(string.Format("Source item to move {0} was not in the Rhino provider but the destination parent {1} was. Cross-provider moving is not supported, but this item could be copied.", itemDefinition.Name, destination.Name));
+			if (existingItem == null) return false;
 
 			SerializedDatabase.MoveItem(existingItem, destination.ID);
 
@@ -298,7 +313,7 @@ namespace Rhino
 
 			var existingItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
-			if (existingItem == null) return true; // it was already gone (probably will never occur)
+			if (existingItem == null) return true; // it was already gone or an item from a different data provider
 
 			SerializedDatabase.DeleteItem(existingItem);
 
@@ -352,7 +367,7 @@ namespace Rhino
 
 			var existingItem = SerializedDatabase.GetItem(itemDefinition.ID);
 
-			Assert.IsNotNull(existingItem, "Existing item {0} did not exist in the serialization store!", itemDefinition.ID);
+			if (existingItem == null) return false; // item was not in this data provider, cede control to the next one
 
 			var savedItem = ItemSynchronization.BuildSyncItem(changes.Item);
 

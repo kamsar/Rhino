@@ -3,8 +3,10 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using Sitecore.Data;
+using Sitecore.Data.Managers;
 using Sitecore.Data.Serialization.ObjectModel;
 using Sitecore.Diagnostics;
+using Sitecore.Globalization;
 
 namespace Rhino
 {
@@ -34,7 +36,11 @@ namespace Rhino
 		{
 			string versionString = uri.Version.Number.ToString(CultureInfo.InvariantCulture);
 
-			return item.Versions.FirstOrDefault(x => x.Language.Equals(uri.Language.Name, StringComparison.OrdinalIgnoreCase) && x.Version == versionString);
+			var language = uri.Language;
+
+			if (language.Equals(Language.Invariant)) language = LanguageManager.DefaultLanguage;
+
+			return item.Versions.FirstOrDefault(x => x.Language.Equals(language.Name, StringComparison.OrdinalIgnoreCase) && x.Version == versionString);
 		}
 
 		public static SyncItem Clone(this SyncItem item)
