@@ -32,7 +32,7 @@ namespace Rhino
 			var sw = new Stopwatch();
 			sw.Start();
 
-			_database = new SerializedDatabase(connectionString);
+			_database = new SerializedDatabase(connectionString, true);
 
 			sw.Stop();
 			Log.Info(string.Format("Rhino: loaded {0} serialized items into memory index in {1}ms", SerializedDatabase.Count, sw.ElapsedMilliseconds), this);

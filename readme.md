@@ -8,6 +8,7 @@ The data provider simply ghosts in the serialized items into the content tree, m
 
 ## News ##
 
+* Watcher support. If you change, rename, or delete a serialized item on disk appropriate caches get cleared so the change appears immediately in the content editor
 * Support for filtering the data provider's scope. For example, you attach the provider to the master database and specify that you only want /sitecore/templates to be handled by it
     * Supports exclusions, leading to a "jagged" tree (e.g Templates is Rhino, but Templates/system is not)
     * Inclusions/exclusions are managed by the serialization preset system built into sitecore. This makes it easy to do an initial serialization with /sitecore/admin/serialization.aspx
@@ -17,7 +18,7 @@ The data provider simply ghosts in the serialized items into the content tree, m
 * High speed indexed in-memory serialization store. Should scale to expected number of items for templates, etc. Won't scale to a large content database, but that's not the intended purpose.
 
 ## TODO ##
-
+* Renaming items currently causes duplicate serialized items to be created (e.g. one with the old name, one with the new) - need to handle this, as well as for children
 * Cache invalidation with a FileSystemWatcher (when serialized items change, invalidate the cache for them). This is handled if the change is made by Rhino, but not if say SCM updates change files on disk.
 * Option to 'auto-load' an included path: if the serialization root path for an inclusion is empty, fill it using the SQL provider's set of items. This would make installation really easy.
 * Testing. Make no mistake this is an alpha quality codebase. I wouldn't use this in production right now.

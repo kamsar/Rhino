@@ -1,33 +1,47 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Sitecore.Data;
 using Sitecore.Data.Serialization;
 using Sitecore.Data.Serialization.ObjectModel;
 using Sitecore.Diagnostics;
+using FileSystemEventArgs = System.IO.FileSystemEventArgs;
 
 namespace Rhino.Data
 {
-    public class SerializedDatabase
-    {
+	public class SerializedDatabase
+	{
 		private readonly SerializedIndex _index;
-	    private readonly string _serializationPath;
+		private readonly string _serializationPath;
+		private readonly FileSystemWatcher _watcher;
 
-        public SerializedDatabase(string serializationPath)
-        {
-	        if (!Path.IsPathRooted(serializationPath))
-		        serializationPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, serializationPath);
+		public SerializedDatabase(string serializationPath, bool watchForChanges)
+		{
+			if (!Path.IsPathRooted(serializationPath))
+				serializationPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, serializationPath);
 
-            if (!Directory.Exists(serializationPath))
-            {
-                throw new Exception(string.Format("Path not found {0}, current Path {1}", Path.GetFullPath(serializationPath), AppDomain.CurrentDomain.BaseDirectory));
-            }
+			if (!Directory.Exists(serializationPath))
+			{
+				throw new Exception(string.Format("Path not found {0}, current Path {1}", Path.GetFullPath(serializationPath), AppDomain.CurrentDomain.BaseDirectory));
+			}
 
-            _index = new SerializedIndex(LoadItems(serializationPath));
-	        _serializationPath = serializationPath;
-        }
+			_index = new SerializedIndex(LoadItems(serializationPath));
+			_serializationPath = serializationPath;
+
+			if (watchForChanges)
+			{
+				_watcher = new FileSystemWatcher(serializationPath, "*" + PathUtils.Extension) {IncludeSubdirectories = true};
+				_watcher.Changed += OnFileChanged;
+				_watcher.Created += OnFileChanged;
+				_watcher.Deleted += OnFileChanged;
+				_watcher.Renamed += OnFileRenamed;
+				_watcher.EnableRaisingEvents = true;
+			}
+		}
 
 		public int Count { get { return _index.Count; } }
 
@@ -46,10 +60,10 @@ namespace Rhino.Data
 			return _index.GetItemsWithTemplate(templateId);
 		}
 
-	    public SyncItem GetItem(ID id)
-	    {
-		    return _index.GetItem(id);
-	    }
+		public SyncItem GetItem(ID id)
+		{
+			return _index.GetItem(id);
+		}
 
 		public SyncItem GetItem(string path)
 		{
@@ -61,16 +75,19 @@ namespace Rhino.Data
 			Assert.ArgumentNotNull(syncItem, "syncItem");
 
 			var newPath = GetSyncItemPath(syncItem);
-			
+
 			var parentPath = Path.GetDirectoryName(newPath);
-			if(parentPath != null)
+			if (parentPath != null)
 				Directory.CreateDirectory(parentPath);
 
-			using (var fileStream = File.Open(newPath, FileMode.Create, FileAccess.Write, FileShare.Write))
+			using(new WatcherDisabler(_watcher))
 			{
-				using (var writer = new StreamWriter(fileStream))
+				using (var fileStream = File.Open(newPath, FileMode.Create, FileAccess.Write, FileShare.Write))
 				{
-					syncItem.Serialize(writer);
+					using (var writer = new StreamWriter(fileStream))
+					{
+						syncItem.Serialize(writer);
+					}
 				}
 			}
 
@@ -82,12 +99,13 @@ namespace Rhino.Data
 			Assert.ArgumentNotNull(syncItem, "syncItem");
 
 			var path = GetSyncItemPath(syncItem);
-
-			if(File.Exists(path)) File.Delete(path); // remove the file
-
 			var directory = PathUtils.StripPath(path);
 
-			if(Directory.Exists(directory)) Directory.Delete(directory, true); // remove the directory that held child items, if it exists
+			using (new WatcherDisabler(_watcher))
+			{
+				if (File.Exists(path)) File.Delete(path); // remove the file
+				if (Directory.Exists(directory)) Directory.Delete(directory, true); // remove the directory that held child items, if it exists
+			}
 
 			_index.ClearIndexes(syncItem.GetSitecoreId()); // remove from indexes
 		}
@@ -123,9 +141,9 @@ namespace Rhino.Data
 			var newRootPath = string.Concat(newParentItem.ItemPath, "/", syncItem.Name);
 
 			var descendantItems = _index.GetDescendants(syncItem.GetSitecoreId());
-	
+
 			var oldSerializationPath = GetSyncItemPath(syncItem);
-			
+
 			// update the path and parent IDs to the new location
 			syncItem.ParentID = newParent.ToString();
 			syncItem.ItemPath = string.Concat(newParentItem.ItemPath, "/", syncItem.Name);
@@ -139,22 +157,31 @@ namespace Rhino.Data
 				foreach (var descendant in descendantItems)
 				{
 					string oldPath = GetSyncItemPath(descendant);
-	
+
 					// save to new location
 					descendant.ItemPath = descendant.ItemPath.Replace(oldRootPath, newRootPath);
 					SaveItem(descendant);
 
 					// remove old file location
-					if (File.Exists(oldPath)) File.Delete(oldPath);
+					if (File.Exists(oldPath))
+					{
+						using (new WatcherDisabler(_watcher))
+						{
+							File.Delete(oldPath);
+						}
+					}
 				}
 			}
 
-			// remove the old serialized item from disk
-			if (File.Exists(oldSerializationPath)) File.Delete(oldSerializationPath);
+			using (new WatcherDisabler(_watcher))
+			{
+				// remove the old serialized item from disk
+				if (File.Exists(oldSerializationPath)) File.Delete(oldSerializationPath);
 
-			// remove the old serialized children folder from disk
-			var directoryPath = PathUtils.StripPath(oldSerializationPath);
-			if(Directory.Exists(directoryPath)) Directory.Delete(directoryPath, true);
+				// remove the old serialized children folder from disk
+				var directoryPath = PathUtils.StripPath(oldSerializationPath);
+				if (Directory.Exists(directoryPath)) Directory.Delete(directoryPath, true);
+			}
 		}
 
 		private string GetSyncItemPath(SyncItem syncItem)
@@ -210,5 +237,75 @@ namespace Rhino.Data
 				}
 			}
 		}
-    }
+
+		private void OnFileChanged(object source, FileSystemEventArgs args)
+		{
+			OnFileChanged(args.FullPath, args.ChangeType);
+		}
+
+		private void OnFileRenamed(object source, RenamedEventArgs args)
+		{
+			OnFileChanged(args.FullPath, args.ChangeType);
+		}
+
+		private void OnFileChanged(string path, WatcherChangeTypes changeType)
+		{
+			if (changeType == WatcherChangeTypes.Created || changeType == WatcherChangeTypes.Changed || changeType == WatcherChangeTypes.Renamed)
+			{
+				Log.Info(string.Format("Serialized item {0} changed ({1}), reloading caches.", path, changeType), this);
+
+				const int retries = 5;
+				for (int i = 0; i < retries; i++)
+				{
+					try
+					{
+						var syncItem = LoadItem(path);
+						if (syncItem != null)
+						{
+							_index.UpdateIndexes(syncItem);
+
+							// TODO: nuclear bomb when all we need is a nerf gun
+							Sitecore.Caching.CacheManager.ClearAllCaches();
+						}
+					}
+					catch (IOException iex)
+					{
+						// this is here because FSW can tell us the file has changed
+						// BEFORE it's done with writing. So if we get access denied,
+						// we wait 500ms and retry up to 5x before rethrowing
+						if (i < retries - 1)
+						{
+							Thread.Sleep(500);
+							continue;
+						}
+
+						Log.Error("Failed to read serialization file", iex, this);
+					}
+
+					break;
+				}
+			}
+
+			if (changeType == WatcherChangeTypes.Deleted)
+			{
+				Log.Info(string.Format("Serialized item {0} deleted, reloading caches.", path), this);
+
+				var root = _serializationPath;
+				// if the path does not end with a backslash (\) MakeItemPath won't generate a proper ItemReference (//master vs /master)
+				if (!root.EndsWith(@"\")) root += @"\";
+
+				var itemPath = ItemReference.Parse(PathUtils.MakeItemPath(path, root));
+
+				var item = _index.GetItem(itemPath.Path);
+
+				if (item != null)
+				{
+					_index.ClearIndexes(item.GetSitecoreId());
+
+					// TODO: nuclear bomb when all we need is a nerf gun
+					Sitecore.Caching.CacheManager.ClearAllCaches();
+				}
+			}
+		}
+	}
 }
