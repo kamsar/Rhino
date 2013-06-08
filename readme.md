@@ -8,15 +8,17 @@ The data provider simply ghosts in the serialized items into the content tree, m
 
 ## News ##
 
+* Support for filtering the data provider's scope. For example, you attach the provider to the master database and specify that you only want /sitecore/templates to be handled by it
+    * Supports exclusions, leading to a "jagged" tree (e.g Templates is Rhino, but Templates/system is not)
+    * Inclusions/exclusions are managed by the serialization preset system built into sitecore. This makes it easy to do an initial serialization with /sitecore/admin/serialization.aspx
+    * Rhino doesn't even really need an initial serialization, as the SQL provider still merges children with it. For example, if Templates/Foo is included, but not serialized yet, and you change it those changes will be written to disk and then start "overriding" the SQL version of the item.
+* Improved serialized file reading (performance ~1.7x faster loading cache on the first site load on my SSD)
 * Read/write provider implemented: Supports adding and removing items and versions, copying, moving, etc. Properties, template changes, shared field migrations are not currently supported.
 * High speed indexed in-memory serialization store. Should scale to expected number of items for templates, etc. Won't scale to a large content database, but that's not the intended purpose.
 
 ## TODO ##
 
-* Presently the provider indexes an entire database. The goal is to make it include only parts of the database (e.g. act as a data provider in concert with the SQL provider on the master database)
-    * This is mostly working. Need to test all the various methods and make sure the filtering works in all cases.
 * Cache invalidation with a FileSystemWatcher (when serialized items change, invalidate the cache for them). This is handled if the change is made by Rhino, but not if say SCM updates change files on disk.
-* Ability to exclude certain portions of an included path, ala a serialization preset
 * Option to 'auto-load' an included path: if the serialization root path for an inclusion is empty, fill it using the SQL provider's set of items. This would make installation really easy.
 * Testing. Make no mistake this is an alpha quality codebase. I wouldn't use this in production right now.
 
@@ -30,6 +32,8 @@ However it's very nice for performance once it is loaded - significantly faster 
 This is a highly modified fork of [SitecoreData](https://github.com/pbering/SitecoreData), a project that has an embryonic serialization data provider.
 
 Rhino would have never happened if [@alexshyba](https://twitter.com/alexshyba) hadn't suggested the idea and brought the SitecoreData project to my attention.
+
+[Robin Hermanussen](https://twitter.com/knifecore) also has written a similar provider to this but more geared towards usage as a unit testing tool: [Fixture](https://github.com/hermanussen/Sitecore-FixtureDataProvider)
 
 This is built with Sitecore 7.0 130424
 
