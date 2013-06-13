@@ -76,13 +76,6 @@ namespace Rhino
 		{
 			Assert.ArgumentNotNullOrEmpty(itemPath, "itemPath");
 
-			ID idPath;
-			if (ID.TryParse(itemPath, out idPath)) return idPath;
-
-			itemPath = itemPath.TrimEnd('/');
-
-			if (itemPath == string.Empty) itemPath = "/sitecore"; // the content editor expects "/" to resolve to /sitecore (verified against SQL provider)
-
 			var syncItem = SerializedDatabase.GetItem(itemPath);
 
 			if (syncItem == null) return null;
@@ -377,7 +370,10 @@ namespace Rhino
 
 			var savedItem = ItemSynchronization.BuildSyncItem(changes.Item);
 
-			SerializedDatabase.SaveItem(savedItem);
+			if(changes.Renamed)
+				SerializedDatabase.SaveAndRenameItem(savedItem, changes.Properties["name"].OriginalValue.ToString());
+			else
+				SerializedDatabase.SaveItem(savedItem);
 
 			return true;
 		}

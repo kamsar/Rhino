@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -34,7 +33,7 @@ namespace Rhino.Data
 
 			if (watchForChanges)
 			{
-				_watcher = new FileSystemWatcher(serializationPath, "*" + PathUtils.Extension) {IncludeSubdirectories = true};
+				_watcher = new FileSystemWatcher(serializationPath, "*" + PathUtils.Extension) { IncludeSubdirectories = true };
 				_watcher.Changed += OnFileChanged;
 				_watcher.Created += OnFileChanged;
 				_watcher.Deleted += OnFileChanged;
@@ -67,6 +66,13 @@ namespace Rhino.Data
 
 		public SyncItem GetItem(string path)
 		{
+			ID idPath;
+			if (ID.TryParse(path, out idPath)) return GetItem(idPath);
+
+			path = path.TrimEnd('/');
+
+			if (path == string.Empty) path = "/sitecore"; // the content editor expects "/" to resolve to /sitecore (verified against SQL provider)
+
 			return _index.GetItem(path);
 		}
 
@@ -74,13 +80,13 @@ namespace Rhino.Data
 		{
 			Assert.ArgumentNotNull(syncItem, "syncItem");
 
-			var newPath = GetSyncItemPath(syncItem);
+			var newPath = GetPhysicalSyncItemPath(syncItem);
 
 			var parentPath = Path.GetDirectoryName(newPath);
 			if (parentPath != null)
 				Directory.CreateDirectory(parentPath);
 
-			using(new WatcherDisabler(_watcher))
+			using (new WatcherDisabler(_watcher))
 			{
 				using (var fileStream = File.Open(newPath, FileMode.Create, FileAccess.Write, FileShare.Write))
 				{
@@ -98,7 +104,7 @@ namespace Rhino.Data
 		{
 			Assert.ArgumentNotNull(syncItem, "syncItem");
 
-			var path = GetSyncItemPath(syncItem);
+			var path = GetPhysicalSyncItemPath(syncItem);
 			var directory = PathUtils.StripPath(path);
 
 			using (new WatcherDisabler(_watcher))
@@ -133,6 +139,9 @@ namespace Rhino.Data
 
 		public void MoveItem(SyncItem syncItem, ID newParent)
 		{
+			Assert.ArgumentNotNull(syncItem, "syncItem");
+			Assert.ArgumentNotNullOrEmpty(newParent, "newParent");
+
 			var newParentItem = _index.GetItem(newParent);
 
 			Assert.IsNotNull(newParentItem, "New parent item {0} did not exist!", newParent);
@@ -142,8 +151,6 @@ namespace Rhino.Data
 
 			var descendantItems = _index.GetDescendants(syncItem.GetSitecoreId());
 
-			var oldSerializationPath = GetSyncItemPath(syncItem);
-
 			// update the path and parent IDs to the new location
 			syncItem.ParentID = newParent.ToString();
 			syncItem.ItemPath = string.Concat(newParentItem.ItemPath, "/", syncItem.Name);
@@ -151,15 +158,38 @@ namespace Rhino.Data
 			// write the moved sync item to its new destination
 			SaveItem(syncItem);
 
+			MoveDescendants(oldRootPath, newRootPath, syncItem.DatabaseName, descendantItems);
+		}
+
+		public void SaveAndRenameItem(SyncItem renamedItem, string oldName)
+		{
+			var oldRootPath = renamedItem.ItemPath.Substring(0, renamedItem.ItemPath.LastIndexOf('/') + 1) + oldName;
+			var newRootPath = renamedItem.ItemPath;
+
+			var descendantItems = _index.GetDescendants(renamedItem.GetSitecoreId());
+
+			// write the moved sync item to its new destination
+			SaveItem(renamedItem);
+
+			MoveDescendants(oldRootPath, newRootPath, renamedItem.DatabaseName, descendantItems);
+		}
+
+		private void MoveDescendants(string oldSitecorePath, string newSitecorePath, string databaseName, SyncItem[] descendantItems)
+		{
+			// if the paths were the same, no moving occurs (this can happen when saving templates, which spuriously can report "renamed" when they are not actually any such thing)
+			if (oldSitecorePath.Equals(newSitecorePath, StringComparison.OrdinalIgnoreCase)) return;
+
+			var oldSerializationPath = GetPhysicalPath(new ItemReference(databaseName, oldSitecorePath));
+
 			// move descendant items by reserializing them and fixing their ItemPath
 			if (descendantItems.Length > 0)
 			{
 				foreach (var descendant in descendantItems)
 				{
-					string oldPath = GetSyncItemPath(descendant);
+					string oldPath = GetPhysicalSyncItemPath(descendant);
 
 					// save to new location
-					descendant.ItemPath = descendant.ItemPath.Replace(oldRootPath, newRootPath);
+					descendant.ItemPath = descendant.ItemPath.Replace(oldSitecorePath, newSitecorePath);
 					SaveItem(descendant);
 
 					// remove old file location
@@ -184,10 +214,17 @@ namespace Rhino.Data
 			}
 		}
 
-		private string GetSyncItemPath(SyncItem syncItem)
+		private string GetPhysicalSyncItemPath(SyncItem syncItem)
 		{
+			return GetPhysicalPath(new ItemReference(syncItem.DatabaseName, syncItem.ItemPath));
+		}
+
+		private string GetPhysicalPath(ItemReference reference)
+		{
+			Assert.ArgumentNotNull(reference, "reference");
+
 			// note: there is no overload of GetFilePath() that takes a custom root - so we use GetDirectoryPath and add the extension like GetFilePath does
-			return PathUtils.GetDirectoryPath(new ItemReference(syncItem.DatabaseName, syncItem.ItemPath).ToString(), _serializationPath) + PathUtils.Extension;
+			return PathUtils.GetDirectoryPath(reference.ToString(), _serializationPath) + PathUtils.Extension;
 		}
 
 		private IEnumerable<SyncItem> LoadItems(string path)
