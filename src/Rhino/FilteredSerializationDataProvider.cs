@@ -9,6 +9,10 @@ using Sitecore.Globalization;
 
 namespace Rhino
 {
+	/// <summary>
+	/// This is a serialization data provider designed to handle only some sections of a database, defined by a serialization preset or other filter implementation.
+	/// Configure it, attach as a data provider ahead of the main SQL data provider, and it will "override" the SQL provider at the configured locations.
+	/// </summary>
 	public class FilteredSerializationDataProvider : SerializationDataProvider
 	{
 		readonly IFilter _filter;

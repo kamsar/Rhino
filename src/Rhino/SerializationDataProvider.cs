@@ -18,6 +18,12 @@ using Version = Sitecore.Data.Version;
 
 namespace Rhino
 {
+	/// <summary>
+	/// A Sitecore data provider that reads and writes to serialized item files on disk.
+	/// The connection string name should point to a connection string containing the web-root-relative path to the serialization folder
+	/// NOTE: a subfolder for the database name should be created under the connection string path (e.g. if connection string is data\serialization,
+	/// a data\serialization\master folder should contain serialized items for master - don't point the connection directly at the master folder)
+	/// </summary>
 	public class SerializationDataProvider : DataProvider
 	{
 		private readonly SerializedDatabase _database;
