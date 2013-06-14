@@ -8,6 +8,7 @@ The data provider simply ghosts in the serialized items into the content tree, m
 
 ## News ##
 
+* Rhino.Fsck command-line tool implemented. This checks a serialized tree for consistency - e.g. valid parent IDs, physical:.item path matching, and duplicate files with the same item ID. This should be a nice QA tool and may be a basis for some unit tests later.
 * Renaming items now works correctly, including migration of child items to their new path (note: renaming an item with LOTS of children would probably be pretty slow since we have to rewrite the path on each one)
 * Watcher support. If you change, rename, or delete a serialized item on disk appropriate caches get cleared so the change appears immediately in the content editor (eg you pulled some updated items from Git)
 * Support for filtering the data provider's scope. For example, you attach the provider to the master database and specify that you only want /sitecore/templates to be handled by it
@@ -22,7 +23,6 @@ The data provider simply ghosts in the serialized items into the content tree, m
 * Test with a production-like configuration that might also use items from the core db (with a different instance of the provider). Do we need to point directly to the serialized root and assume a db name in path calcs? Reject items based on other db path? Interop when multiple DBs are serialized in part.
 * Option to 'auto-load' an included path: if the serialization root path for an inclusion is empty, fill it using the SQL provider's set of items. This would make installation really easy.
 * Testing, preferably of a repeatable automated nature. Make no mistake this is an alpha quality codebase. I wouldn't use this in production right now. The fsck tool should help with this.
-* Implement "fsck" for serialized folders. Read all the items in, check that paths and databases in the files match physical paths, parent IDs match (if the parent is serialized), no duplicate IDs in different files, tree consistency (eg if /foo is serialized, /foo/bar is not, but /foo/bar/baz is = probable error), ???
 
 ## Performance ##
 
