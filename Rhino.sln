@@ -16,6 +16,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rhino.Website", "src\Rhino.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rhino", "src\Rhino\Rhino.csproj", "{E6116792-BCD2-41BD-9901-9E7DC27D0CF5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rhino.Fsck", "src\Rhino.Fsck\Rhino.Fsck.csproj", "{F3D95CAD-C0B5-4E3D-A114-1664223707FC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,6 +32,10 @@ Global
 		{E6116792-BCD2-41BD-9901-9E7DC27D0CF5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E6116792-BCD2-41BD-9901-9E7DC27D0CF5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E6116792-BCD2-41BD-9901-9E7DC27D0CF5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F3D95CAD-C0B5-4E3D-A114-1664223707FC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F3D95CAD-C0B5-4E3D-A114-1664223707FC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F3D95CAD-C0B5-4E3D-A114-1664223707FC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F3D95CAD-C0B5-4E3D-A114-1664223707FC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
