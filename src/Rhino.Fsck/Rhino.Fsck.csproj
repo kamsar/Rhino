@@ -50,6 +50,8 @@
     <Compile Include="DiskItem.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Tests\InvalidMetadataTest.cs" />
+    <Compile Include="Tests\NoVersionsTest.cs" />
     <Compile Include="Tests\DuplicateIdTest.cs" />
     <Compile Include="Tests\ItemTestResult.cs" />
     <Compile Include="Tests\ITest.cs" />

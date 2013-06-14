@@ -38,9 +38,11 @@ namespace Rhino.Fsck
 
 				var tests = new ITest[]
 					{
+						new InvalidMetadataTest(), 
 						(args.Length < 2) ? new PathTest(args[0]) : new PathTest(args[0], args[1]),
 						new ParentIdTest(),
-						new DuplicateIdTest()
+						new DuplicateIdTest(),
+						new NoVersionsTest() 
 					};
 
 				Console.WriteLine("Testing...");
@@ -70,6 +72,8 @@ namespace Rhino.Fsck
 				if (result.ContainsFailures)
 				{
 					failures++;
+					Console.WriteLine();
+					Console.ForegroundColor = ConsoleColor.Cyan;
 					Console.WriteLine("{0}:", result.Item.FullPath);
 
 					foreach (var failure in result.Results.FailedTests)
@@ -117,15 +121,23 @@ namespace Rhino.Fsck
 			var files = Directory.GetFiles(rootPath, string.Format("*{0}", PathUtils.Extension), SearchOption.AllDirectories);
 			var diskItems = new List<DiskItem>(files.Length);
 
-			var writeLock = new object();
-			Parallel.ForEach(files, subPath =>
+			foreach(var subPath in files)
 			{
-				var item = new DiskItem(subPath);
-				lock (writeLock)
+				try
 				{
+					var item = new DiskItem(subPath);
 					diskItems.Add(item);
 				}
-			});
+				catch (Exception ex)
+				{
+					Console.ForegroundColor = ConsoleColor.Red;
+					Console.WriteLine();
+					Console.WriteLine("Error: unable to read serialized format: {0}", subPath);
+					Console.WriteLine(ex.Message);
+					Console.WriteLine(ex.StackTrace);
+					Console.ResetColor();
+				}
+			}
 
 			return diskItems.ToArray();
 		}
